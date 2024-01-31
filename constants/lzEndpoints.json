@@ -1,0 +1,14 @@
+{
+    "canto-testnet": {
+        "endpoint": "0x6edce65403992e310a62460808c4b910d972f10f",
+        "id": 40159
+    },
+    "fantom-testnet": {
+        "endpoint": "0x6edce65403992e310a62460808c4b910d972f10f",
+        "id": 40112
+    },
+    "mumbai": {
+        "endpoint": "0x6edce65403992e310a62460808c4b910d972f10f",
+        "id": 40109
+    }
+}

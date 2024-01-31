@@ -1,0 +1,14 @@
+{
+  "name": "hardhat-project",
+  "devDependencies": {
+    "@nomicfoundation/hardhat-toolbox": "^4.0.0",
+    "hardhat": "^2.19.5"
+  },
+  "dependencies": {
+    "@layerzerolabs/lz-evm-oapp-v2": "^2.0.25",
+    "@layerzerolabs/lz-v2-utilities": "^2.0.25",
+    "cli-ux": "^6.0.9",
+    "dotenv": "^16.4.1",
+    "hardhat-gas-reporter": "^1.0.9"
+  }
+}
