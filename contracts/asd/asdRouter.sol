@@ -29,7 +29,7 @@ contract ASDRouter is IOAppComposer, Ownable {
 
     event LZReceived(address _from, bytes32 _guid, bytes _message, address _executor, bytes _extraData, uint _value);
 
-    event TokenRefund(address _tokenAddress, address _refundAddress, uint _amount, uint _nativeAmount, string _reason);
+    event TokenRefund(bytes32 _guid, address _tokenAddress, address _refundAddress, uint _amount, uint _nativeAmount, string _reason);
 
     constructor(address _noteAddress, uint32 _cantoLzEID) {
         noteAddress = _noteAddress;
@@ -67,7 +67,7 @@ contract ASDRouter is IOAppComposer, Ownable {
         // check the composed message for proper formatting
         if (composeMsg.length != 224) {
             // return tokens to the address that sent them (composeFrom)
-            _refundToken(_from, OFTComposeMsgCodec.bytes32ToAddress(composeFrom), amountLD, msg.value, "Invalid composeMsg length");
+            _refundToken(_guid, _from, OFTComposeMsgCodec.bytes32ToAddress(composeFrom), amountLD, msg.value, "Invalid composeMsg length");
             return;
         }
         OftComposeMessage memory payload = abi.decode(composeMsg, (OftComposeMessage));
@@ -75,7 +75,7 @@ contract ASDRouter is IOAppComposer, Ownable {
         /* check if the OFT stable coin is whitelisted */
         if (!whitelistedOFTStableCoins[_from]) {
             // return tokens to the refund address on canto
-            _refundToken(_from, payload._cantoRefundAddress, amountLD, msg.value, "not whitelisted");
+            _refundToken(_guid, _from, payload._cantoRefundAddress, amountLD, msg.value, "not whitelisted");
             return;
         }
 
@@ -85,7 +85,7 @@ contract ASDRouter is IOAppComposer, Ownable {
         // check if the swap was successful
         if (!successfulSwap) {
             // return tokens to the refund address on canto
-            _refundToken(_from, payload._cantoRefundAddress, amountLD, msg.value, "swap failed");
+            _refundToken(_guid, _from, payload._cantoRefundAddress, amountLD, msg.value, "swap failed");
             return;
         }
 
@@ -95,7 +95,7 @@ contract ASDRouter is IOAppComposer, Ownable {
         // check if deposit was successful
         if (!successfulDeposit) {
             // return $NOTE to the refund address on canto since OFT was swapped already
-            _refundToken(noteAddress, payload._cantoRefundAddress, amountNote, msg.value, reason);
+            _refundToken(_guid, noteAddress, payload._cantoRefundAddress, amountNote, msg.value, reason);
             return;
         }
 
@@ -109,7 +109,7 @@ contract ASDRouter is IOAppComposer, Ownable {
             // make sure msg.value is enough to cover the fee or this transaction will revert
             if (msg.value < payload._feeForSend) {
                 // refund ASD tokens on canto
-                _refundToken(payload._cantoAsdAddress, payload._cantoRefundAddress, amountNote, msg.value, "insufficient msg.value for send fee");
+                _refundToken(_guid, payload._cantoAsdAddress, payload._cantoRefundAddress, amountNote, msg.value, "insufficient msg.value for send fee");
                 return;
             }
 
@@ -124,7 +124,7 @@ contract ASDRouter is IOAppComposer, Ownable {
             // check if the send was successful
             if (!successfulSend) {
                 // refund ASD tokens on canto
-                _refundToken(payload._cantoAsdAddress, payload._cantoRefundAddress, amountNote, msg.value, string(data));
+                _refundToken(_guid, payload._cantoAsdAddress, payload._cantoRefundAddress, amountNote, msg.value, string(data));
                 return;
             }
         }
@@ -149,14 +149,15 @@ contract ASDRouter is IOAppComposer, Ownable {
 
     /**
      * @notice refunds tokens when lzCompose fails
+     * @param _guid The GUID of the message from layer zero.
      * @param _tokenAddress address of token
      * @param _refundAddress address to refund to on canto
      * @param _amount amount to send
      * @param _nativeAmount amount to send in native token
      */
-    function _refundToken(address _tokenAddress, address _refundAddress, uint _amount, uint _nativeAmount, string memory _reason) internal {
+    function _refundToken(bytes32 _guid, address _tokenAddress, address _refundAddress, uint _amount, uint _nativeAmount, string memory _reason) internal {
         // emit event
-        emit TokenRefund(_tokenAddress, _refundAddress, _amount, _nativeAmount, _reason);
+        emit TokenRefund(_guid, _tokenAddress, _refundAddress, _amount, _nativeAmount, _reason);
         // transfer tokens to refund address
         IERC20(_tokenAddress).transfer(_refundAddress, _amount);
         // transfer native tokens to refund address and check that this value is less than or equal to msg.value
