@@ -31,7 +31,7 @@ contract ASDRouter is IOAppComposer, Ownable {
 
     event TokenRefund(bytes32 indexed _guid, address _tokenAddress, address _refundAddress, uint _amount, uint _nativeAmount, string _reason);
 
-    event ASDSent(bytes32 indexed _guid, address _to, uint _amount, uint32 _dstEid, bool _lzSend);
+    event ASDSent(bytes32 indexed _guid, address _to, address _asdAddress, uint _amount, uint32 _dstEid, bool _lzSend);
 
     constructor(address _noteAddress, uint32 _cantoLzEID) {
         noteAddress = _noteAddress;
@@ -102,36 +102,7 @@ contract ASDRouter is IOAppComposer, Ownable {
         }
 
         /* transfer the ASD tokens to the destination receiver */
-        if (payload._dstLzEid == cantoLzEID) {
-            // just transfer the ASD tokens to the destination receiver
-            emit ASDSent(_guid, payload._dstReceiver, amountNote, payload._dstLzEid, false);
-            ASDOFT(payload._cantoAsdAddress).transfer(payload._dstReceiver, amountNote);
-        } else {
-            // use Layer Zero oapp to send ASD tokens to the destination receiver on the destination chain
-
-            // make sure msg.value is enough to cover the fee or this transaction will revert
-            if (msg.value < payload._feeForSend) {
-                // refund ASD tokens on canto
-                _refundToken(_guid, payload._cantoAsdAddress, payload._cantoRefundAddress, amountNote, msg.value, "insufficient msg.value for send fee");
-                return;
-            }
-
-            // create send params for the Layer Zero oapp
-            bytes memory sendOptions = OptionsBuilder.addExecutorLzReceiveOption(OptionsBuilder.newOptions(), 200000, 0);
-            SendParam memory sendParams = SendParam({dstEid: payload._dstLzEid, to: OFTComposeMsgCodec.addressToBytes32(payload._dstReceiver), amountLD: amountNote, minAmountLD: amountNote, extraOptions: sendOptions, composeMsg: "0x", oftCmd: "0x"});
-            MessagingFee memory fee = MessagingFee({nativeFee: payload._feeForSend, lzTokenFee: 0});
-
-            // send tokens
-            (bool successfulSend, bytes memory data) = payable(payload._cantoAsdAddress).call{value: payload._feeForSend}(abi.encodeWithSelector(IOFT.send.selector, sendParams, fee, payload._cantoRefundAddress));
-
-            // check if the send was successful
-            if (!successfulSend) {
-                // refund ASD tokens on canto
-                _refundToken(_guid, payload._cantoAsdAddress, payload._cantoRefundAddress, amountNote, msg.value, string(data));
-                return;
-            }
-            emit ASDSent(_guid, payload._dstReceiver, amountNote, payload._dstLzEid, true);
-        }
+        _sendASD(_guid, payload, amountNote);
     }
 
     /**
@@ -149,6 +120,45 @@ contract ASDRouter is IOAppComposer, Ownable {
         _amountLD = OFTComposeMsgCodec.amountLD(_message);
         _composeFrom = OFTComposeMsgCodec.composeFrom(_message);
         _composeMsg = OFTComposeMsgCodec.composeMsg(_message);
+    }
+
+    /**
+     * @param _guid the GUID of the message from layer zero.
+     * @param _payload the payload of the message.
+     * @param _amount  the amount of ASD tokens to send.
+     */
+    function _sendASD(bytes32 _guid, OftComposeMessage memory _payload, uint _amount) internal {
+        /* transfer the ASD tokens to the destination receiver */
+        if (_payload._dstLzEid == cantoLzEID) {
+            // just transfer the ASD tokens to the destination receiver
+            emit ASDSent(_guid, _payload._dstReceiver, _payload._cantoAsdAddress, _amount, _payload._dstLzEid, false);
+            ASDOFT(_payload._cantoAsdAddress).transfer(_payload._dstReceiver, _amount);
+        } else {
+            // use Layer Zero oapp to send ASD tokens to the destination receiver on the destination chain
+
+            // make sure msg.value is enough to cover the fee or this transaction will revert
+            if (msg.value < _payload._feeForSend) {
+                // refund ASD tokens on canto
+                _refundToken(_guid, _payload._cantoAsdAddress, _payload._cantoRefundAddress, _amount, msg.value, "insufficient msg.value for send fee");
+                return;
+            }
+
+            // create send params for the Layer Zero oapp
+            bytes memory sendOptions = OptionsBuilder.addExecutorLzReceiveOption(OptionsBuilder.newOptions(), 200000, 0);
+            SendParam memory sendParams = SendParam({dstEid: _payload._dstLzEid, to: OFTComposeMsgCodec.addressToBytes32(_payload._dstReceiver), amountLD: _amount, minAmountLD: _amount, extraOptions: sendOptions, composeMsg: "0x", oftCmd: "0x"});
+            MessagingFee memory fee = MessagingFee({nativeFee: _payload._feeForSend, lzTokenFee: 0});
+
+            // send tokens
+            (bool successfulSend, bytes memory data) = payable(_payload._cantoAsdAddress).call{value: _payload._feeForSend}(abi.encodeWithSelector(IOFT.send.selector, sendParams, fee, _payload._cantoRefundAddress));
+
+            // check if the send was successful
+            if (!successfulSend) {
+                // refund ASD tokens on canto
+                _refundToken(_guid, _payload._cantoAsdAddress, _payload._cantoRefundAddress, _amount, msg.value, string(data));
+                return;
+            }
+            emit ASDSent(_guid, _payload._dstReceiver, _payload._cantoAsdAddress, _amount, _payload._dstLzEid, true);
+        }
     }
 
     /**
