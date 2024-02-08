@@ -27,9 +27,11 @@ contract ASDRouter is IOAppComposer, Ownable {
         uint256 _feeForSend;
     }
 
-    event LZReceived(address _from, bytes32 _guid, bytes _message, address _executor, bytes _extraData, uint _value);
+    event LZReceived(address _from, bytes32 indexed _guid, bytes _message, address _executor, bytes _extraData, uint _value);
 
-    event TokenRefund(bytes32 _guid, address _tokenAddress, address _refundAddress, uint _amount, uint _nativeAmount, string _reason);
+    event TokenRefund(bytes32 indexed _guid, address _tokenAddress, address _refundAddress, uint _amount, uint _nativeAmount, string _reason);
+
+    event ASDSent(bytes32 indexed _guid, address _to, uint _amount, uint32 _dstEid, bool _lzSend);
 
     constructor(address _noteAddress, uint32 _cantoLzEID) {
         noteAddress = _noteAddress;
@@ -102,6 +104,7 @@ contract ASDRouter is IOAppComposer, Ownable {
         /* transfer the ASD tokens to the destination receiver */
         if (payload._dstLzEid == cantoLzEID) {
             // just transfer the ASD tokens to the destination receiver
+            emit ASDSent(_guid, payload._dstReceiver, amountNote, payload._dstLzEid, false);
             ASDOFT(payload._cantoAsdAddress).transfer(payload._dstReceiver, amountNote);
         } else {
             // use Layer Zero oapp to send ASD tokens to the destination receiver on the destination chain
@@ -127,6 +130,7 @@ contract ASDRouter is IOAppComposer, Ownable {
                 _refundToken(_guid, payload._cantoAsdAddress, payload._cantoRefundAddress, amountNote, msg.value, string(data));
                 return;
             }
+            emit ASDSent(_guid, payload._dstReceiver, amountNote, payload._dstLzEid, true);
         }
     }
 
