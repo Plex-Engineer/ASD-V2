@@ -21,5 +21,8 @@ task("sendOFT", "send OFT to a remote chain", require("./oft/sendOFT"))
     .addParam("amount", "amount to send in formatted Value (1 = 1e18) ")
     .addParam("remoteChain", "remote chain name");
 
+// oft information
+task("checkPeers", "check peers on a local OFT contract", require("./oft/checkPeers"));
+
 // deploy test contracts
 task("deployTestOFT", "d eploy a test USDC OFT contract", require("./deploy/testContracts/deployTestOFT"));
