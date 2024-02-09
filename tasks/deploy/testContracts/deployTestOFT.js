@@ -1,4 +1,4 @@
-const LZ_ENDPOINTS = require("../../constants/lzEndpoints.json");
+const LZ_ENDPOINTS = require("../../../constants/lzEndpoints.json");
 
 module.exports = async (taskArgs, hre) => {
     let signers = await ethers.getSigners();
