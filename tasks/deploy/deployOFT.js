@@ -1,10 +1,5 @@
-const { cli } = require("cli-ux");
+const { promptToProceed } = require("../taskHelpers");
 const LZ_ENDPOINTS = require("../../constants/lzEndpoints.json");
-
-async function promptToProceed(msg) {
-    const proceed = await cli.prompt(`${msg} y/N`);
-    return ["y", "yes"].includes(proceed.toLowerCase());
-}
 
 module.exports = async (taskArgs, hre) => {
     let signers = await ethers.getSigners();

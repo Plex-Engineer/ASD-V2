@@ -1,11 +1,6 @@
 const LZ_ENDPOINTS = require("../../constants/lzEndpoints.json");
 const LZ_UTILS = require("@layerzerolabs/lz-v2-utilities");
-const { cli } = require("cli-ux");
-
-async function promptToProceed(msg) {
-    const proceed = await cli.prompt(`${msg} y/N`);
-    return ["y", "yes"].includes(proceed.toLowerCase());
-}
+const { promptToProceed } = require("../taskHelpers");
 
 module.exports = async (taskArgs, hre) => {
     let signers = await ethers.getSigners();

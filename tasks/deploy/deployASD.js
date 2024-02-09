@@ -1,10 +1,5 @@
-const { cli } = require("cli-ux");
 const LZ_ENDPOINTS = require("../../constants/lzEndpoints.json");
-
-async function promptToProceed(msg) {
-    const proceed = await cli.prompt(`${msg} y/N`);
-    return ["y", "yes"].includes(proceed.toLowerCase());
-}
+const { promptToProceed } = require("../taskHelpers");
 
 module.exports = async (taskArgs, hre) => {
     const testnet = hre.network.name === "canto-testnet" ? true : hre.network.name === "canto" ? false : null;
