@@ -25,4 +25,4 @@ task("sendOFT", "send OFT to a remote chain", require("./oft/sendOFT"))
 task("checkPeers", "check peers on a local OFT contract", require("./oft/checkPeers"));
 
 // deploy test contracts
-task("deployTestOFT", "d eploy a test USDC OFT contract", require("./deploy/testContracts/deployTestOFT"));
+task("deployTestOFT", "deploy a test USDC OFT contract", require("./deploy/testContracts/deployTestOFT"));
