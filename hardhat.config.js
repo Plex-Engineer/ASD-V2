@@ -30,6 +30,11 @@ module.exports = {
     },
 
     networks: {
+        canto: {
+            url: "https://canto-rpc.ansybl.io/",
+            chainId: 7700,
+            accounts: [getAccount()],
+        },
         "canto-testnet": {
             url: `https://canto-testnet.plexnode.wtf`,
             chainId: 7701,
