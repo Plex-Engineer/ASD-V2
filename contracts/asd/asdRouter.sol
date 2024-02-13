@@ -27,7 +27,7 @@ contract ASDRouter is IOAppComposer, Ownable {
         uint256 _feeForSend;
     }
 
-    event LZReceived(address _from, bytes32 indexed _guid, bytes _message, address _executor, bytes _extraData, uint _value);
+    event LZReceived(bytes32 indexed _guid, address _from, bytes _message, address _executor, bytes _extraData, uint _value);
 
     event TokenRefund(bytes32 indexed _guid, address _tokenAddress, address _refundAddress, uint _amount, uint _nativeAmount, string _reason);
 
@@ -59,7 +59,7 @@ contract ASDRouter is IOAppComposer, Ownable {
      */
     function lzCompose(address _from, bytes32 _guid, bytes calldata _message, address _executor, bytes calldata _extraData) external payable {
         /* log event */
-        emit LZReceived(_from, _guid, _message, _executor, _extraData, msg.value);
+        emit LZReceived(_guid, _from, _message, _executor, _extraData, msg.value);
 
         /* decode OFT composed message */
         (, , uint256 amountLD, bytes32 composeFrom, bytes memory composeMsg) = _decodeOFTComposeMsg(_message);
