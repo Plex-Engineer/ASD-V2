@@ -1,8 +1,8 @@
 const LZ_ENDPOINTS = require("../../constants/lzEndpoints.json");
 
 module.exports = async (taskArgs, hre) => {
-    const noteAddress = "0x03F734Bd9847575fDbE9bEaDDf9C166F880B5E5f";
-    const testUSDCWhitelistAddress = "0xa5bFA7E06eBc71Ca3cc58f5AC0954ebf6E9890E5";
+    const noteAddress = taskArgs.testnet ? "0x03F734Bd9847575fDbE9bEaDDf9C166F880B5E5f" : "0x4e71A2E537B7f9D9413D3991D37958c0b5e1e503";
+    const testUSDCWhitelistAddress = taskArgs.testnet ? "0xa5bFA7E06eBc71Ca3cc58f5AC0954ebf6E9890E5" : "";
 
     let signers = await ethers.getSigners();
     console.log(`Deploying ASDRouter with ${signers[0].address} on ${hre.network.name}...`);

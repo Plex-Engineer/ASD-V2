@@ -3,6 +3,10 @@
         "endpoint": "0x1a44076050125825900e736c501f859c50fe728c",
         "id": 30159
     },
+    "arbitrum": {
+        "endpoint": "0x1a44076050125825900e736c501f859c50fe728c",
+        "id": 30110
+    },
     "canto-testnet": {
         "endpoint": "0x6edce65403992e310a62460808c4b910d972f10f",
         "id": 40159

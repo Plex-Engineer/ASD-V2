@@ -35,6 +35,11 @@ module.exports = {
             chainId: 7700,
             accounts: [getAccount()],
         },
+        arbitrum: {
+            url: "https://arb1.arbitrum.io/rpc",
+            chainId: 42161,
+            accounts: [getAccount()],
+        },
         "canto-testnet": {
             url: `https://canto-testnet.plexnode.wtf`,
             chainId: 7701,
