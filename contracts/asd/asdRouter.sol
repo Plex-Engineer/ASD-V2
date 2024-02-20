@@ -7,14 +7,21 @@ import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {ASDOFT} from "./asdOFT.sol";
 import {IOFT, SendParam, MessagingFee} from "@layerzerolabs/lz-evm-oapp-v2/contracts/oft/interfaces/IOFT.sol";
 import {OptionsBuilder} from "@layerzerolabs/lz-evm-oapp-v2/contracts/oapp/libs/OptionsBuilder.sol";
+import {ICrocSwapDex, ICrocImpact} from "../ambient/CrocInterfaces.sol";
 
 /**
  * @title ASDRouter
  */
 
 contract ASDRouter is IOAppComposer, Ownable {
+    // ambient params
+    address public crocSwapAddress;
+    address public crocImpactAddress;
+    uint public constant ambientPoolIdx = 36000;
+    // canto chain params
     address public noteAddress;
     uint32 public cantoLzEID;
+    // stable coin whitelist for swapping
     mapping(address => bool) public whitelistedOFTStableCoins;
 
     struct OftComposeMessage {
@@ -33,9 +40,11 @@ contract ASDRouter is IOAppComposer, Ownable {
 
     event ASDSent(bytes32 indexed _guid, address _to, address _asdAddress, uint _amount, uint32 _dstEid, bool _lzSend);
 
-    constructor(address _noteAddress, uint32 _cantoLzEID) {
+    constructor(address _noteAddress, uint32 _cantoLzEID, address _crocSwapAddress, address _crocImpactAddress) {
         noteAddress = _noteAddress;
         cantoLzEID = _cantoLzEID;
+        crocSwapAddress = _crocSwapAddress;
+        crocImpactAddress = _crocImpactAddress;
     }
 
     /**
@@ -49,7 +58,7 @@ contract ASDRouter is IOAppComposer, Ownable {
     }
 
     /**
-     * @notice Called by the LZ executor after sending IFT tokens to this contract.
+     * @notice Called by the LZ executor after sending OFT tokens to this contract.
      * @param _from The address of the OFT on this chain.
      * @param _guid The GUID of the message.
      * @param _message The message payload from the executor formatted as an OFT composed message.
@@ -201,13 +210,58 @@ contract ASDRouter is IOAppComposer, Ownable {
      * @param _minAmountNote The minimum amount of $NOTE to receive
      * @return amount The amount of $NOTE received or error code
      */
-    function _swapOFTForNote(address _oftAddress, uint _amount, uint _minAmountNote) internal returns (uint amount, bool success) {
-        if (_amount < _minAmountNote) {
-            amount = 0;
-            success = false;
+    function _swapOFTForNote(address _oftAddress, uint _amount, uint _minAmountNote) internal returns (uint, bool) {
+        // sort tokens
+        address baseToken;
+        address quoteToken;
+        if (_oftAddress < noteAddress) {
+            baseToken = _oftAddress;
+            quoteToken = noteAddress;
         } else {
-            amount = _amount;
-            success = true;
+            baseToken = noteAddress;
+            quoteToken = _oftAddress;
         }
+        // check if pool exists
+        if (ambientPoolFor(baseToken, quoteToken, ambientPoolIdx) == 0) {
+            // nothing swapped, swapped failed
+            return (0, false);
+        }
+
+        // convert amount to uint128
+        uint128 amountConverted = uint128(_amount);
+        // query impact to make sure user will receive at least _minAmountNote
+        bool isNoteBase = baseToken == noteAddress;
+        (int128 baseFlow, int128 quoteFlow, ) = ICrocImpact(crocImpactAddress).calcImpact(baseToken, quoteToken, ambientPoolIdx, !isNoteBase, !isNoteBase, amountConverted, 0, 0);
+
+        // check if amount note received is greater than or equal to _minAmountNote
+
+        int minAmountInt = int(_minAmountNote); // stack too deep fix
+        // flow is negative if it left the pool, so multiply by -1
+        if (isNoteBase && -baseFlow < minAmountInt) {
+            // nothing swapped, swapped failed
+            return (0, false);
+        } else if (!isNoteBase && -quoteFlow < minAmountInt) {
+            // nothing swapped, swapped failed
+            return (0, false);
+        }
+        // convert minAmount to uint for stack too deep fix
+        uint128 uintMinAmount = uint128(_minAmountNote);
+
+        // swap is good to make, use call just in case revert occurs
+        (bool successSwap, bytes memory data) = crocSwapAddress.call(abi.encodeWithSelector(ICrocSwapDex.swap.selector, baseToken, quoteToken, ambientPoolIdx, !isNoteBase, !isNoteBase, amountConverted, 0, 0, uintMinAmount, 0));
+        if (!successSwap) {
+            // nothing swapped, swapped failed
+            return (0, false);
+        }
+        // return amount of note received
+        (int128 baseUsed, int128 quoteUsed) = abi.decode(data, (int128, int128));
+        return (uint128(-1 * (isNoteBase ? baseUsed : quoteUsed)), true);
+    }
+
+    function ambientPoolFor(address _baseToken, address _quoteToken, uint256 _poolIdx) internal view returns (uint256) {
+        bytes32 poolKey = keccak256(abi.encode(_baseToken, _quoteToken, _poolIdx));
+        uint POOL_PARAM_SLOT = 65545;
+        bytes32 slot = keccak256(abi.encode(poolKey, POOL_PARAM_SLOT));
+        return ICrocSwapDex(crocSwapAddress).readSlot(uint256(slot));
     }
 }

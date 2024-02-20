@@ -33,6 +33,8 @@ describe("ASDRouter", function () {
     let USDCOFT;
     let TESTASD;
     let ASDRouter;
+    let CrocSwap;
+    let CrocImpact;
 
     // test amounts
     const amountUSDCSent = ethers.parseEther("100");
@@ -42,14 +44,19 @@ describe("ASDRouter", function () {
         Note = await ethers.deployContract("TestERC20", ["Note", "NOTE"]);
         USDCOFT = await ethers.deployContract("TestERC20", ["USDCOFT", "USDCOFT"]);
         TESTASD = await ethers.deployContract("TestASD", ["ASD", "ASD", Note.target]);
-        ASDRouter = await ethers.deployContract("ASDRouter", [Note.target, cantoLzEndpoint.id]);
+        // ambient test contracts
+        CrocSwap = await ethers.deployContract("MockCrocSwapDex", [Note.target]);
+        CrocImpact = await ethers.deployContract("MockCrocImpact", [CrocSwap.target]);
+        // Router
+        ASDRouter = await ethers.deployContract("ASDRouter", [Note.target, cantoLzEndpoint.id, CrocSwap.target, CrocImpact.target]);
 
         // transfer USDC to router as if it was already sent
         await USDCOFT.transfer(ASDRouter.target, amountUSDCSent);
         expect(await USDCOFT.balanceOf(ASDRouter.target)).to.equal(amountUSDCSent);
-        // trasnfer NOTE to router as if it was swapped for
-        await Note.transfer(ASDRouter.target, ethers.parseEther("1000"));
-        expect(await Note.balanceOf(ASDRouter.target)).to.equal(ethers.parseEther("1000"));
+
+        // transfer NOTE to CrocDex so it can be "swapped" for
+        await Note.transfer(CrocSwap.target, ethers.parseEther("1000"));
+        expect(await Note.balanceOf(CrocSwap.target)).to.equal(ethers.parseEther("1000"));
     });
 
     this.afterEach(async () => {
