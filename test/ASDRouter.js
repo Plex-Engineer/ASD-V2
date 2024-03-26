@@ -35,6 +35,7 @@ describe("ASDRouter", function () {
     let ASDRouter;
     let CrocSwap;
     let CrocImpact;
+    let ASDUSDC;
 
     // test amounts
     const amountUSDCSent = ethers.parseEther("100");
@@ -47,8 +48,16 @@ describe("ASDRouter", function () {
         // ambient test contracts
         CrocSwap = await ethers.deployContract("MockCrocSwapDex", [Note.target]);
         CrocImpact = await ethers.deployContract("MockCrocImpact", [CrocSwap.target]);
+        // ASDUSDC contract
+        ASDUSDC = await ethers.deployContract("ASDUSDC");
         // Router
-        ASDRouter = await ethers.deployContract("ASDRouter", [Note.target, cantoLzEndpoint.id, CrocSwap.target, CrocImpact.target]);
+        ASDRouter = await ethers.deployContract("ASDRouter", [
+            Note.target,
+            cantoLzEndpoint.id,
+            CrocSwap.target,
+            CrocImpact.target,
+            ASDUSDC.target,
+        ]);
 
         // transfer USDC to router as if it was already sent
         await USDCOFT.transfer(ASDRouter.target, amountUSDCSent);
@@ -136,7 +145,7 @@ describe("ASDRouter", function () {
 
     it("lzCompose: bad swap", async () => {
         // whitelist USDC
-        await ASDRouter.updateWhitelist(USDCOFT.target, true);
+        await ASDUSDC.updateWhitelist(USDCOFT.target, true);
         // call lzCompose with minASD too high
         await expect(
             ASDRouter.lzCompose(
@@ -160,14 +169,14 @@ describe("ASDRouter", function () {
             )
         )
             .to.emit(ASDRouter, "TokenRefund")
-            .withArgs(guid, USDCOFT.target, refundAddress, amountUSDCSent, 0, errorMessages.badSwap);
-        // expect USDC to be refunded
-        expect(await USDCOFT.balanceOf(refundAddress)).to.equal(amountUSDCSent);
+            .withArgs(guid, ASDUSDC.target, refundAddress, amountUSDCSent, 0, errorMessages.badSwap);
+        // expect asd-USDC to be refunded
+        expect(await ASDUSDC.balanceOf(refundAddress)).to.equal(amountUSDCSent);
     });
 
     it("lzCompose: bad swap with gas", async () => {
         // whitelist USDC
-        await ASDRouter.updateWhitelist(USDCOFT.target, true);
+        await ASDUSDC.updateWhitelist(USDCOFT.target, true);
         const gas = ethers.parseEther("1");
         // call lzCompose with minASD too high
         await expect(
@@ -193,15 +202,15 @@ describe("ASDRouter", function () {
             )
         )
             .to.emit(ASDRouter, "TokenRefund")
-            .withArgs(guid, USDCOFT.target, refundAddress, amountUSDCSent, gas, errorMessages.badSwap);
+            .withArgs(guid, ASDUSDC.target, refundAddress, amountUSDCSent, gas, errorMessages.badSwap);
         // expect USDC to be refunded
-        expect(await USDCOFT.balanceOf(refundAddress)).to.equal(amountUSDCSent);
+        expect(await ASDUSDC.balanceOf(refundAddress)).to.equal(amountUSDCSent);
         expect(await ethers.provider.getBalance(refundAddress)).to.equal(gas);
     });
 
     it("lzCompose: insufficient send fee", async () => {
         // update whitelist
-        await ASDRouter.updateWhitelist(USDCOFT.target, true);
+        await ASDUSDC.updateWhitelist(USDCOFT.target, true);
         // call lzCompose with msg.value less than send fee (dst not canto)
         await expect(
             ASDRouter.lzCompose(
@@ -232,7 +241,7 @@ describe("ASDRouter", function () {
 
     it("lzCompose: insufficient send fee with gas", async () => {
         // update whitelist
-        await ASDRouter.updateWhitelist(USDCOFT.target, true);
+        await ASDUSDC.updateWhitelist(USDCOFT.target, true);
         const gas = ethers.parseEther("1");
         // call lzCompose with msg.value less than send fee (dst not canto)
         await expect(
@@ -266,7 +275,7 @@ describe("ASDRouter", function () {
 
     it("lzCompose: successful deposit and send on canto", async () => {
         // update whitelist
-        await ASDRouter.updateWhitelist(USDCOFT.target, true);
+        await ASDUSDC.updateWhitelist(USDCOFT.target, true);
         // call lzCompose with valid payload
         await expect(
             ASDRouter.lzCompose(

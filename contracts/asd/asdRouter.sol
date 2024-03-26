@@ -8,6 +8,7 @@ import {ASDOFT} from "./asdOFT.sol";
 import {IOFT, SendParam, MessagingFee} from "@layerzerolabs/lz-evm-oapp-v2/contracts/oft/interfaces/IOFT.sol";
 import {OptionsBuilder} from "@layerzerolabs/lz-evm-oapp-v2/contracts/oapp/libs/OptionsBuilder.sol";
 import {ICrocSwapDex, ICrocImpact} from "../ambient/CrocInterfaces.sol";
+import {ASDUSDC} from "./asdUSDC.sol";
 
 /**
  * @title ASDRouter
@@ -21,8 +22,8 @@ contract ASDRouter is IOAppComposer, Ownable {
     // canto chain params
     address public noteAddress;
     uint32 public cantoLzEID;
-    // stable coin whitelist for swapping
-    mapping(address => bool) public whitelistedOFTStableCoins;
+    // asdUSDC contract for swapping to $NOTE
+    address public asdUSDC;
 
     struct OftComposeMessage {
         uint32 _dstLzEid;
@@ -40,21 +41,12 @@ contract ASDRouter is IOAppComposer, Ownable {
 
     event ASDSent(bytes32 indexed _guid, address _to, address _asdAddress, uint _amount, uint32 _dstEid, bool _lzSend);
 
-    constructor(address _noteAddress, uint32 _cantoLzEID, address _crocSwapAddress, address _crocImpactAddress) {
+    constructor(address _noteAddress, uint32 _cantoLzEID, address _crocSwapAddress, address _crocImpactAddress, address _asdUSDCAddress) {
         noteAddress = _noteAddress;
         cantoLzEID = _cantoLzEID;
         crocSwapAddress = _crocSwapAddress;
         crocImpactAddress = _crocImpactAddress;
-    }
-
-    /**
-     * @notice updates the whitelist for swapping OFT stable coins to $NOTE
-     * @dev only callable by the owner
-     * @param _oftAddress The address of the OFT stable coin contract
-     * @param _whitelisted Whether or not the OFT stable coin is whitelisted
-     */
-    function updateWhitelist(address _oftAddress, bool _whitelisted) external onlyOwner {
-        whitelistedOFTStableCoins[_oftAddress] = _whitelisted;
+        asdUSDC = _asdUSDCAddress;
     }
 
     /**
@@ -84,19 +76,23 @@ contract ASDRouter is IOAppComposer, Ownable {
         OftComposeMessage memory payload = abi.decode(composeMsg, (OftComposeMessage));
 
         /* check if the OFT stable coin is whitelisted */
-        if (!whitelistedOFTStableCoins[_from]) {
+        if (!ASDUSDC(asdUSDC).whitelistedUSDCVersions(_from)) {
             // return tokens to the refund address on canto
             _refundToken(_guid, _from, payload._cantoRefundAddress, amountLD, msg.value, "not whitelisted");
             return;
         }
 
+        /* deposit oft to receive asdUSDC for swapping */
+        IERC20(_from).approve(asdUSDC, amountLD);
+        uint amountUSDC = ASDUSDC(asdUSDC).deposit(_from, amountLD);
+
         /* swap tokens for $NOTE (check minAmount for slippage) */
-        (uint amountNote, bool successfulSwap) = _swapOFTForNote(_from, amountLD, payload._minAmountASD);
+        (uint amountNote, bool successfulSwap) = _swapOFTForNote(asdUSDC, amountUSDC, payload._minAmountASD);
 
         // check if the swap was successful
         if (!successfulSwap) {
             // return tokens to the refund address on canto
-            _refundToken(_guid, _from, payload._cantoRefundAddress, amountLD, msg.value, "swap failed");
+            _refundToken(_guid, asdUSDC, payload._cantoRefundAddress, amountUSDC, msg.value, "swap failed");
             return;
         }
 
