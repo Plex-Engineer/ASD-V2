@@ -1,6 +1,5 @@
 pragma solidity ^0.8.22;
 
-import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 import {IOAppComposer} from "@layerzerolabs/lz-evm-oapp-v2/contracts/oapp/interfaces/IOAppComposer.sol";
 import {OFTComposeMsgCodec} from "@layerzerolabs/lz-evm-oapp-v2/contracts/oft/libs/OFTComposeMsgCodec.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
@@ -14,7 +13,7 @@ import {ASDUSDC} from "./asdUSDC.sol";
  * @title ASDRouter
  */
 
-contract ASDRouter is IOAppComposer, Ownable {
+contract ASDRouter is IOAppComposer {
     // ambient params
     address public crocSwapAddress;
     address public crocImpactAddress;
