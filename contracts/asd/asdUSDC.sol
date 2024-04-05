@@ -50,8 +50,6 @@ contract ASDUSDC is ERC20, Ownable {
      * @return Amount of USDC withdrawn
      */
     function withdraw(address _usdcVersion, uint256 _amount) external returns (uint256) {
-        // check whitelist
-        require(whitelistedUSDCVersions[_usdcVersion], "ASDUSDC: USDC version not whitelisted");
         // burn tokens
         _burn(msg.sender, _amount);
         // calculate amount to withdraw
@@ -71,6 +69,8 @@ contract ASDUSDC is ERC20, Ownable {
      * @return Amount of USDC minted
      */
     function recover(address _usdcVersion) external onlyOwner returns (uint256) {
+        // check whitelist
+        require(whitelistedUSDCVersions[_usdcVersion], "ASDUSDC: USDC version not whitelisted");
         // recover amount
         uint amountToRecover = ERC20(_usdcVersion).balanceOf(address(this)) - usdcBalances[_usdcVersion];
         usdcBalances[_usdcVersion] += amountToRecover;
