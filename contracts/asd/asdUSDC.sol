@@ -3,6 +3,7 @@ pragma solidity ^0.8.22;
 import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import {Turnstile} from "../clm/Turnstile.sol";
 
 /**
  * @title ASDUSDC
@@ -15,7 +16,13 @@ contract ASDUSDC is ERC20, Ownable {
     event Deposit(address _version, uint _amount);
     event Withdrawal(address _version, uint _amount);
 
-    constructor() ERC20("ASD USDC", "asdUSDC") {}
+    constructor() ERC20("ASD USDC", "asdUSDC") {
+        if (block.chainid == 7700 || block.chainid == 7701) {
+            // Register CSR on Canto main- and testnet
+            Turnstile turnstile = Turnstile(0xEcf044C5B4b867CFda001101c617eCd347095B44);
+            turnstile.register(msg.sender);
+        }
+    }
 
     /**
      * @notice Add a USDC version to the whitelist
