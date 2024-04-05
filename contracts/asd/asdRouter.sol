@@ -8,6 +8,7 @@ import {IOFT, SendParam, MessagingFee} from "@layerzerolabs/lz-evm-oapp-v2/contr
 import {OptionsBuilder} from "@layerzerolabs/lz-evm-oapp-v2/contracts/oapp/libs/OptionsBuilder.sol";
 import {ICrocSwapDex, ICrocImpact} from "../ambient/CrocInterfaces.sol";
 import {ASDUSDC} from "./asdUSDC.sol";
+import {CErc20Interface} from "../clm/CTokenInterfaces.sol";
 
 /**
  * @title ASDRouter
@@ -19,7 +20,7 @@ contract ASDRouter is IOAppComposer {
     address public crocImpactAddress;
     uint public constant ambientPoolIdx = 36000;
     // canto chain params
-    address public noteAddress;
+    address public cNoteAddress;
     uint32 public cantoLzEID;
     // asdUSDC contract for swapping to $NOTE
     address public asdUSDC;
@@ -40,13 +41,17 @@ contract ASDRouter is IOAppComposer {
 
     event ASDSent(bytes32 indexed _guid, address _to, address _asdAddress, uint _amount, uint32 _dstEid, bool _lzSend);
 
-    constructor(address _noteAddress, uint32 _cantoLzEID, address _crocSwapAddress, address _crocImpactAddress, address _asdUSDCAddress) {
-        noteAddress = _noteAddress;
+    constructor(address _cNoteAddress, uint32 _cantoLzEID, address _crocSwapAddress, address _crocImpactAddress, address _asdUSDCAddress) {
+        cNoteAddress = _cNoteAddress;
         cantoLzEID = _cantoLzEID;
         crocSwapAddress = _crocSwapAddress;
         crocImpactAddress = _crocImpactAddress;
         asdUSDC = _asdUSDCAddress;
         ASDUSDC(_asdUSDCAddress).approve(crocSwapAddress, type(uint).max);
+    }
+
+    function _getNoteAddress() internal returns (address) {
+        return CErc20Interface(cNoteAddress).underlying();
     }
 
     /**
@@ -102,7 +107,7 @@ contract ASDRouter is IOAppComposer {
         // check if deposit was successful
         if (!successfulDeposit) {
             // return $NOTE to the refund address on canto since OFT was swapped already
-            _refundToken(_guid, noteAddress, payload._cantoRefundAddress, amountNote, msg.value, reason);
+            _refundToken(_guid, _getNoteAddress(), payload._cantoRefundAddress, amountNote, msg.value, reason);
             return;
         }
 
@@ -192,7 +197,7 @@ contract ASDRouter is IOAppComposer {
      */
     function _depositNoteToASDVault(address _asdVault, uint _amountNote) internal returns (bool, string memory) {
         // approve asd vault to spend $NOTE
-        IERC20(noteAddress).approve(_asdVault, _amountNote);
+        IERC20(_getNoteAddress()).approve(_asdVault, _amountNote);
         // deposit $NOTE to asd vault (use call, so this doesn't revert)
         (bool success, bytes memory errReason) = _asdVault.call(abi.encodeWithSelector(ASDOFT.mint.selector, _amountNote));
         return (success, string(errReason));
@@ -210,6 +215,7 @@ contract ASDRouter is IOAppComposer {
         // sort tokens
         address baseToken;
         address quoteToken;
+        address noteAddress = _getNoteAddress();
         if (_oftAddress < noteAddress) {
             baseToken = _oftAddress;
             quoteToken = noteAddress;
