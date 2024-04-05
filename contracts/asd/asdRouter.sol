@@ -9,6 +9,7 @@ import {OptionsBuilder} from "@layerzerolabs/lz-evm-oapp-v2/contracts/oapp/libs/
 import {ICrocSwapDex, ICrocImpact} from "../ambient/CrocInterfaces.sol";
 import {ASDUSDC} from "./asdUSDC.sol";
 import {CErc20Interface} from "../clm/CTokenInterfaces.sol";
+import {WCANTO} from "../clm/WCANTO.sol";
 
 /**
  * @title ASDRouter
@@ -186,7 +187,12 @@ contract ASDRouter is IOAppComposer {
         IERC20(_tokenAddress).transfer(_refundAddress, _amount);
         // transfer native tokens to refund address and check that this value is less than or equal to msg.value
         if (_nativeAmount > 0 && _nativeAmount <= msg.value) {
-            payable(_refundAddress).transfer(_nativeAmount);
+            (bool sent, ) = payable(_refundAddress).call{value: _nativeAmount}("");
+            if (!sent) {
+                // wrap into WCanto and send that way
+                WCANTO(0x826551890Dc65655a0Aceca109aB11AbDbD7a07B).deposit{value: _nativeAmount}();
+                WCANTO(0x826551890Dc65655a0Aceca109aB11AbDbD7a07B).transfer(_refundAddress, _nativeAmount);
+            }
         }
     }
 

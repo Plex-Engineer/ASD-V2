@@ -37,7 +37,7 @@ contract ASDUSDC is ERC20, Ownable {
         SafeERC20.safeTransferFrom(ERC20(_usdcVersion), msg.sender, address(this), _amount);
         usdcBalances[_usdcVersion] += _amount;
         // Mint the same amount of asdUSDC tokens but take decimals into account
-        uint256 amountToMint = _amount * (10 ** (this.decimals() - ERC20(_usdcVersion).decimals()));
+        uint256 amountToMint = _calculateASDUSDCAmount(_amount, ERC20(_usdcVersion).decimals());
         _mint(msg.sender, amountToMint);
         emit Deposit(_usdcVersion, _amount);
         return amountToMint;
@@ -50,10 +50,11 @@ contract ASDUSDC is ERC20, Ownable {
      * @return Amount of USDC withdrawn
      */
     function withdraw(address _usdcVersion, uint256 _amount) external returns (uint256) {
-        // burn tokens
-        _burn(msg.sender, _amount);
         // calculate amount to withdraw
-        uint256 amountToWithdraw = _amount / (10 ** (this.decimals() - ERC20(_usdcVersion).decimals()));
+        uint256 amountToWithdraw = _calculateUSDCVersionAmount(_amount, ERC20(_usdcVersion).decimals());
+        // recalculate the amount to burn since usdc version could have less decimals
+        uint256 amountToBurn = _calculateASDUSDCAmount(amountToWithdraw, ERC20(_usdcVersion).decimals());
+        _burn(msg.sender, amountToBurn);
         // check balance
         require(usdcBalances[_usdcVersion] >= amountToWithdraw, "ASDUSDC: Not enough USDC balance");
         // transfer USDC
@@ -75,8 +76,26 @@ contract ASDUSDC is ERC20, Ownable {
         uint amountToRecover = ERC20(_usdcVersion).balanceOf(address(this)) - usdcBalances[_usdcVersion];
         usdcBalances[_usdcVersion] += amountToRecover;
         // mint tokens
-        uint256 amountToMint = amountToRecover * (10 ** (this.decimals() - ERC20(_usdcVersion).decimals()));
+        uint256 amountToMint = _calculateASDUSDCAmount(amountToRecover, ERC20(_usdcVersion).decimals());
         _mint(msg.sender, amountToMint);
         return amountToMint;
+    }
+
+    /**
+     * @notice calculates the amount of usdcVersion from asdUSDC amount
+     * @param _asdUSDCAmount amount of asdUSDC
+     * @param _usdcDecimals decimals of usdc version
+     */
+    function _calculateUSDCVersionAmount(uint _asdUSDCAmount, uint8 _usdcDecimals) internal view returns (uint) {
+        return _asdUSDCAmount / (10 ** (this.decimals() - _usdcDecimals));
+    }
+
+    /**
+     * @notice calculates the amount of this token from the usdc version amount
+     * @param _usdcVersionAmount amount of usdc version amount
+     * @param _usdcDecimals decimals of usdc version
+     */
+    function _calculateASDUSDCAmount(uint _usdcVersionAmount, uint8 _usdcDecimals) internal view returns (uint) {
+        return _usdcVersionAmount * (10 ** (this.decimals() - _usdcDecimals));
     }
 }
