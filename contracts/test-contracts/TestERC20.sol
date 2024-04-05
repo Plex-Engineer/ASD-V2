@@ -6,4 +6,9 @@ contract TestERC20 is ERC20 {
     constructor(string memory _name, string memory _symbol) ERC20(_name, _symbol) {
         _mint(msg.sender, 1000 ether);
     }
+
+    // for cNote test implementation
+    function underlying() public view returns (address) {
+        return address(this);
+    }
 }
