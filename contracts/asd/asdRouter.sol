@@ -46,6 +46,7 @@ contract ASDRouter is IOAppComposer {
         crocSwapAddress = _crocSwapAddress;
         crocImpactAddress = _crocImpactAddress;
         asdUSDC = _asdUSDCAddress;
+        ASDUSDC(_asdUSDCAddress).approve(crocSwapAddress, type(uint).max);
     }
 
     /**
