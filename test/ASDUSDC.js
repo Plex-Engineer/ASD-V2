@@ -6,6 +6,7 @@ describe("ASDUSDC", function () {
     let usdc1;
     let usdc2;
     let usdc3;
+    let usdc4;
     this.beforeEach(async () => {
         // deploy ASDUSDC contract
         asdUSDC = await ethers.deployContract("ASDUSDC");
@@ -13,15 +14,20 @@ describe("ASDUSDC", function () {
         usdc1 = await ethers.deployContract("TestERC20", ["USDC1", "USDC1"]);
         usdc2 = await ethers.deployContract("TestERC20", ["USDC2", "USDC2"]);
         usdc3 = await ethers.deployContract("TestERC20", ["USDC3", "USDC3"]);
+        usdc4 = await ethers.deployContract("TestERC20", ["USDC4", "USDC4"]);
+        // set decimals for usdc4 to 6
+        await usdc4.setDecimals(6);
         // set whitelist for 2 of the tokens
         await asdUSDC.updateWhitelist(usdc1.target, true);
         await asdUSDC.updateWhitelist(usdc2.target, true);
+        await asdUSDC.updateWhitelist(usdc4.target, true);
     });
 
     it("should set whitelist for correct contract addresses", async () => {
         expect(await asdUSDC.whitelistedUSDCVersions(usdc1.target)).to.equal(true);
         expect(await asdUSDC.whitelistedUSDCVersions(usdc2.target)).to.equal(true);
         expect(await asdUSDC.whitelistedUSDCVersions(usdc3.target)).to.equal(false);
+        expect(await asdUSDC.whitelistedUSDCVersions(usdc4.target)).to.equal(true);
     });
 
     it("should deposit whitelisted usdc versions for asdUSDC", async () => {
@@ -73,5 +79,23 @@ describe("ASDUSDC", function () {
         await asdUSDC.recover(usdc1.target);
         expect(await asdUSDC.usdcBalances(usdc1.target)).to.equal(usdc1Send);
         expect(await asdUSDC.balanceOf(signer)).to.equal(usdc1Send);
+    });
+
+    it("should deposit and withdraw with different decimals", async () => {
+        const [signer] = await ethers.getSigners();
+        const usdc4Deposit = 1000e6;
+        await usdc4.approve(asdUSDC.target, usdc4Deposit);
+        await asdUSDC.deposit(usdc4.target, usdc4Deposit);
+
+        const usdc4Withdraw = BigInt(1000e18);
+        expect(await asdUSDC.balanceOf(signer)).to.equal(usdc4Withdraw);
+
+        // split withdrawals to try and get rounding errors
+        await asdUSDC.withdraw(usdc4.target, usdc4Withdraw / BigInt(2) - BigInt(1));
+        await asdUSDC.withdraw(usdc4.target, usdc4Withdraw / BigInt(2) + BigInt(1e12));
+
+        // check that all asdUSDC is burned
+        expect(await asdUSDC.balanceOf(signer)).to.equal(0);
+        expect(await usdc4.balanceOf(asdUSDC.target), "asdUSDC contract still has USDC4").to.equal(0);
     });
 });

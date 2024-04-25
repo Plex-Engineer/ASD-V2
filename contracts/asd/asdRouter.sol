@@ -9,6 +9,8 @@ import {OptionsBuilder} from "@layerzerolabs/lz-evm-oapp-v2/contracts/oapp/libs/
 import {ICrocSwapDex, ICrocImpact} from "../ambient/CrocInterfaces.sol";
 import {ASDUSDC} from "./asdUSDC.sol";
 import {CErc20Interface} from "../clm/CTokenInterfaces.sol";
+import {WCANTO} from "../clm/WCANTO.sol";
+import {Turnstile} from "../clm/Turnstile.sol";
 
 /**
  * @title ASDRouter
@@ -50,9 +52,14 @@ contract ASDRouter is IOAppComposer {
         asdUSDC = _asdUSDCAddress;
         ASDUSDC(_asdUSDCAddress).approve(crocSwapAddress, type(uint).max);
         cantoLzEndpoint = _cantoLzEndpoint;
+        if (block.chainid == 7700 || block.chainid == 7701) {
+            // Register CSR on Canto main- and testnet
+            Turnstile turnstile = Turnstile(0xEcf044C5B4b867CFda001101c617eCd347095B44);
+            turnstile.register(msg.sender);
+        }
     }
 
-    function _getNoteAddress() internal returns (address) {
+    function _getNoteAddress() internal view returns (address) {
         return CErc20Interface(cNoteAddress).underlying();
     }
 
@@ -92,8 +99,12 @@ contract ASDRouter is IOAppComposer {
         }
 
         /* deposit oft to receive asdUSDC for swapping */
-        IERC20(_from).approve(asdUSDC, amountLD);
-        uint amountUSDC = ASDUSDC(asdUSDC).deposit(_from, amountLD);
+        (bool successOFTDeposit, uint amountUSDC) = _depositOFTForASDUSDC(_from, amountLD);
+        if (!successOFTDeposit) {
+            // return tokens to the refund address on canto
+            _refundToken(_guid, _from, payload._cantoRefundAddress, amountLD, msg.value, "unsuccessful deposit");
+            return;
+        }
 
         /* swap tokens for $NOTE (check minAmount for slippage) */
         (uint amountNote, bool successfulSwap) = _swapOFTForNote(asdUSDC, amountUSDC, payload._minAmountASD);
@@ -106,12 +117,12 @@ contract ASDRouter is IOAppComposer {
         }
 
         /* deposit $NOTE to the correct asd vault to receive ASD tokens */
-        (bool successfulDeposit, string memory reason) = _depositNoteToASDVault(payload._cantoAsdAddress, amountNote);
+        (bool successfulDeposit, ) = _depositNoteToASDVault(payload._cantoAsdAddress, amountNote);
 
         // check if deposit was successful
         if (!successfulDeposit) {
             // return $NOTE to the refund address on canto since OFT was swapped already
-            _refundToken(_guid, _getNoteAddress(), payload._cantoRefundAddress, amountNote, msg.value, reason);
+            _refundToken(_guid, _getNoteAddress(), payload._cantoRefundAddress, amountNote, msg.value, "unsuccessful deposit to ASD vault");
             return;
         }
 
@@ -147,6 +158,10 @@ contract ASDRouter is IOAppComposer {
             // just transfer the ASD tokens to the destination receiver
             emit ASDSent(_guid, _payload._dstReceiver, _payload._cantoAsdAddress, _amount, _payload._dstLzEid, false);
             ASDOFT(_payload._cantoAsdAddress).transfer(_payload._dstReceiver, _amount);
+            // msg.value might have been sent, refund this since it is not needed
+            if (msg.value > 0) {
+                _refundToken(_guid, address(0), _payload._cantoRefundAddress, 0, msg.value, "no msg.value needed: canto is destination chain");
+            }
         } else {
             // use Layer Zero oapp to send ASD tokens to the destination receiver on the destination chain
 
@@ -171,6 +186,12 @@ contract ASDRouter is IOAppComposer {
                 _refundToken(_guid, _payload._cantoAsdAddress, _payload._cantoRefundAddress, _amount, msg.value, string(data));
                 return;
             }
+            // check to make sure all msg.value was used, refund if not
+            uint leftOverNativeFee = msg.value - _payload._feeForSend;
+            if (leftOverNativeFee > 0) {
+                // refund difference
+                _refundToken(_guid, address(0), _payload._cantoRefundAddress, 0, leftOverNativeFee, "too much msg.value sent for lz fee");
+            }
             emit ASDSent(_guid, _payload._dstReceiver, _payload._cantoAsdAddress, _amount, _payload._dstLzEid, true);
         }
     }
@@ -187,11 +208,28 @@ contract ASDRouter is IOAppComposer {
         // emit event
         emit TokenRefund(_guid, _tokenAddress, _refundAddress, _amount, _nativeAmount, _reason);
         // transfer tokens to refund address
-        IERC20(_tokenAddress).transfer(_refundAddress, _amount);
+        // check if zero address (might just be refunding native tokens)
+        if (_tokenAddress != address(0)) {
+            IERC20(_tokenAddress).transfer(_refundAddress, _amount);
+        }
         // transfer native tokens to refund address and check that this value is less than or equal to msg.value
         if (_nativeAmount > 0 && _nativeAmount <= msg.value) {
-            payable(_refundAddress).transfer(_nativeAmount);
+            (bool sent, ) = payable(_refundAddress).call{value: _nativeAmount}("");
+            if (!sent) {
+                // wrap into WCanto and send that way
+                WCANTO(0x826551890Dc65655a0Aceca109aB11AbDbD7a07B).deposit{value: _nativeAmount}();
+                WCANTO(0x826551890Dc65655a0Aceca109aB11AbDbD7a07B).transfer(_refundAddress, _nativeAmount);
+            }
         }
+    }
+
+    function _depositOFTForASDUSDC(address _oftVersion, uint _amount) internal returns (bool, uint) {
+        IERC20(_oftVersion).approve(asdUSDC, _amount);
+        (bool success, bytes memory amountBytes) = asdUSDC.call(abi.encodeWithSelector(ASDUSDC.deposit.selector, _oftVersion, _amount));
+        if (!success) {
+            return (false, 0);
+        }
+        return (true, uint(bytes32(amountBytes)));
     }
 
     /**
