@@ -24,6 +24,7 @@ contract ASDRouter is IOAppComposer {
     // canto chain params
     address public cNoteAddress;
     uint32 public cantoLzEID;
+    address public cantoLzEndpoint;
     // asdUSDC contract for swapping to $NOTE
     address public asdUSDC;
 
@@ -43,13 +44,14 @@ contract ASDRouter is IOAppComposer {
 
     event ASDSent(bytes32 indexed _guid, address _to, address _asdAddress, uint _amount, uint32 _dstEid, bool _lzSend);
 
-    constructor(address _cNoteAddress, uint32 _cantoLzEID, address _crocSwapAddress, address _crocImpactAddress, address _asdUSDCAddress) {
+    constructor(address _cNoteAddress, uint32 _cantoLzEID, address _crocSwapAddress, address _crocImpactAddress, address _asdUSDCAddress, address _cantoLzEndpoint) {
         cNoteAddress = _cNoteAddress;
         cantoLzEID = _cantoLzEID;
         crocSwapAddress = _crocSwapAddress;
         crocImpactAddress = _crocImpactAddress;
         asdUSDC = _asdUSDCAddress;
         ASDUSDC(_asdUSDCAddress).approve(crocSwapAddress, type(uint).max);
+        cantoLzEndpoint = _cantoLzEndpoint;
         if (block.chainid == 7700 || block.chainid == 7701) {
             // Register CSR on Canto main- and testnet
             Turnstile turnstile = Turnstile(0xEcf044C5B4b867CFda001101c617eCd347095B44);
@@ -71,6 +73,8 @@ contract ASDRouter is IOAppComposer {
      * @dev Cannot revert anywhere, must send the tokens to the intended receiver if something fails (token's will be lost otherwise)
      */
     function lzCompose(address _from, bytes32 _guid, bytes calldata _message, address _executor, bytes calldata _extraData) external payable {
+        // only time this function will revert if the caller is incorrect (only lz endpoint can call this)
+        require(msg.sender == cantoLzEndpoint, "ASDROUTER: only lz endpoint");
         /* log event */
         emit LZReceived(_guid, _from, _message, _executor, _extraData, msg.value);
 

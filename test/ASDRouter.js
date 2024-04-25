@@ -1,7 +1,6 @@
 const { expect } = require("chai");
 const helpers = require("@nomicfoundation/hardhat-toolbox/network-helpers");
 const { ethers } = require("hardhat");
-const LZ_ENDPOINTS = require("../constants/lzEndpoints.json");
 
 const generatedComposeMsg = (from, amount, payload) =>
     ethers.solidityPacked(
@@ -23,9 +22,8 @@ const errorMessages = {
 };
 
 describe("ASDRouter", function () {
-    const cantoLzEndpoint = LZ_ENDPOINTS["canto-testnet"];
+    const cantoLzEndpointId = 1;
 
-    const executorAddress = "0xc0ffee254729296a45a3885639AC7E10F9d54979"; // random address
     const refundAddress = "0x9C29A5579EdfaA8F08dE82E805ea5744D9c50F9D"; // random address
 
     // testing contracts
@@ -36,6 +34,7 @@ describe("ASDRouter", function () {
     let CrocSwap;
     let CrocImpact;
     let ASDUSDC;
+    let LzEndpoint;
 
     // test amounts
     const amountUSDCSent = ethers.parseEther("100");
@@ -50,13 +49,16 @@ describe("ASDRouter", function () {
         CrocImpact = await ethers.deployContract("MockCrocImpact", [CrocSwap.target]);
         // ASDUSDC contract
         ASDUSDC = await ethers.deployContract("ASDUSDC");
+        // mock lz endpoint to call lzCompose from
+        LzEndpoint = await ethers.deployContract("MockLZEndpoint", []);
         // Router
         ASDRouter = await ethers.deployContract("ASDRouter", [
             Note.target,
-            cantoLzEndpoint.id,
+            cantoLzEndpointId,
             CrocSwap.target,
             CrocImpact.target,
             ASDUSDC.target,
+            LzEndpoint.target,
         ]);
 
         // transfer USDC to router as if it was already sent
@@ -75,7 +77,9 @@ describe("ASDRouter", function () {
 
     it("lzCompose: invalid payload", async () => {
         // call lzCompose with invalid payload
-        await expect(ASDRouter.lzCompose(USDCOFT.target, guid, generatedComposeMsg(refundAddress, amountUSDCSent, "0x"), executorAddress, "0x"))
+        await expect(
+            LzEndpoint.lzCompose(USDCOFT.target, ASDRouter.target, guid, 0, generatedComposeMsg(refundAddress, amountUSDCSent, "0x"), "0x")
+        )
             .to.emit(ASDRouter, "TokenRefund")
             .withArgs(guid, USDCOFT.target, refundAddress, amountUSDCSent, 0, errorMessages.invalidPayload);
 
@@ -87,7 +91,7 @@ describe("ASDRouter", function () {
         const gas = ethers.parseEther("1");
         // call lzCompose with invalid payload
         await expect(
-            ASDRouter.lzCompose(USDCOFT.target, guid, generatedComposeMsg(refundAddress, amountUSDCSent, "0x"), executorAddress, "0x", {
+            LzEndpoint.lzCompose(USDCOFT.target, ASDRouter.target, guid, 0, generatedComposeMsg(refundAddress, amountUSDCSent, "0x"), "0x", {
                 value: gas,
             })
         )
@@ -101,15 +105,16 @@ describe("ASDRouter", function () {
     it("lzCompose: not whitelisted", async () => {
         // call lzCompose with un-whitelisted token
         await expect(
-            ASDRouter.lzCompose(
+            LzEndpoint.lzCompose(
                 USDCOFT.target,
+                ASDRouter.target,
                 guid,
+                0,
                 generatedComposeMsg(
                     refundAddress,
                     amountUSDCSent,
-                    generatedRouterPayload(cantoLzEndpoint.id, refundAddress, TESTASD.target, TESTASD.target, "0", refundAddress, "0")
+                    generatedRouterPayload(cantoLzEndpointId, refundAddress, TESTASD.target, TESTASD.target, "0", refundAddress, "0")
                 ),
-                executorAddress,
                 "0x"
             )
         )
@@ -123,15 +128,16 @@ describe("ASDRouter", function () {
         const gas = ethers.parseEther("1");
         // call lzCompose with un-whitelisted token
         await expect(
-            ASDRouter.lzCompose(
+            LzEndpoint.lzCompose(
                 USDCOFT.target,
+                ASDRouter.target,
                 guid,
+                0,
                 generatedComposeMsg(
                     refundAddress,
                     amountUSDCSent,
-                    generatedRouterPayload(cantoLzEndpoint.id, refundAddress, TESTASD.target, TESTASD.target, "0", refundAddress, "0")
+                    generatedRouterPayload(cantoLzEndpointId, refundAddress, TESTASD.target, TESTASD.target, "0", refundAddress, "0")
                 ),
-                executorAddress,
                 "0x",
                 { value: gas }
             )
@@ -148,14 +154,16 @@ describe("ASDRouter", function () {
         await ASDUSDC.updateWhitelist(USDCOFT.target, true);
         // call lzCompose with minASD too high
         await expect(
-            ASDRouter.lzCompose(
+            LzEndpoint.lzCompose(
                 USDCOFT.target,
+                ASDRouter.target,
                 guid,
+                0,
                 generatedComposeMsg(
                     refundAddress,
                     amountUSDCSent,
                     generatedRouterPayload(
-                        cantoLzEndpoint.id,
+                        cantoLzEndpointId,
                         refundAddress,
                         TESTASD.target,
                         TESTASD.target,
@@ -164,7 +172,6 @@ describe("ASDRouter", function () {
                         "0"
                     )
                 ),
-                executorAddress,
                 "0x"
             )
         )
@@ -180,14 +187,16 @@ describe("ASDRouter", function () {
         const gas = ethers.parseEther("1");
         // call lzCompose with minASD too high
         await expect(
-            ASDRouter.lzCompose(
+            LzEndpoint.lzCompose(
                 USDCOFT.target,
+                ASDRouter.target,
                 guid,
+                0,
                 generatedComposeMsg(
                     refundAddress,
                     amountUSDCSent,
                     generatedRouterPayload(
-                        cantoLzEndpoint.id,
+                        cantoLzEndpointId,
                         refundAddress,
                         TESTASD.target,
                         TESTASD.target,
@@ -196,7 +205,6 @@ describe("ASDRouter", function () {
                         "0"
                     )
                 ),
-                executorAddress,
                 "0x",
                 { value: gas }
             )
@@ -213,14 +221,16 @@ describe("ASDRouter", function () {
         await ASDUSDC.updateWhitelist(USDCOFT.target, true);
         // call lzCompose with msg.value less than send fee (dst not canto)
         await expect(
-            ASDRouter.lzCompose(
+            LzEndpoint.lzCompose(
                 USDCOFT.target,
+                ASDRouter.target,
                 guid,
+                0,
                 generatedComposeMsg(
                     refundAddress,
                     amountUSDCSent,
                     generatedRouterPayload(
-                        cantoLzEndpoint.id + 1,
+                        cantoLzEndpointId + 1,
                         refundAddress,
                         TESTASD.target,
                         TESTASD.target,
@@ -229,7 +239,6 @@ describe("ASDRouter", function () {
                         ethers.parseEther("10").toString() // test fee
                     )
                 ),
-                executorAddress,
                 "0x"
             )
         )
@@ -245,14 +254,16 @@ describe("ASDRouter", function () {
         const gas = ethers.parseEther("1");
         // call lzCompose with msg.value less than send fee (dst not canto)
         await expect(
-            ASDRouter.lzCompose(
+            LzEndpoint.lzCompose(
                 USDCOFT.target,
+                ASDRouter.target,
                 guid,
+                0,
                 generatedComposeMsg(
                     refundAddress,
                     amountUSDCSent,
                     generatedRouterPayload(
-                        cantoLzEndpoint.id + 1,
+                        cantoLzEndpointId + 1,
                         refundAddress,
                         TESTASD.target,
                         TESTASD.target,
@@ -261,7 +272,6 @@ describe("ASDRouter", function () {
                         ethers.parseEther("10").toString() // test fee
                     )
                 ),
-                executorAddress,
                 "0x",
                 { value: gas }
             )
@@ -278,20 +288,21 @@ describe("ASDRouter", function () {
         await ASDUSDC.updateWhitelist(USDCOFT.target, true);
         // call lzCompose with valid payload
         await expect(
-            ASDRouter.lzCompose(
+            LzEndpoint.lzCompose(
                 USDCOFT.target,
+                ASDRouter.target,
                 guid,
+                0,
                 generatedComposeMsg(
                     refundAddress,
                     amountUSDCSent,
-                    generatedRouterPayload(cantoLzEndpoint.id, refundAddress, TESTASD.target, TESTASD.target, "0", refundAddress, "0")
+                    generatedRouterPayload(cantoLzEndpointId, refundAddress, TESTASD.target, TESTASD.target, "0", refundAddress, "0")
                 ),
-                executorAddress,
                 "0x"
             )
         )
             .to.emit(ASDRouter, "ASDSent")
-            .withArgs(guid, refundAddress, TESTASD.target, amountUSDCSent, cantoLzEndpoint.id, false);
+            .withArgs(guid, refundAddress, TESTASD.target, amountUSDCSent, cantoLzEndpointId, false);
         // expect ASD to be sent to canto
         expect(await TESTASD.balanceOf(refundAddress)).to.equal(amountUSDCSent);
     });
